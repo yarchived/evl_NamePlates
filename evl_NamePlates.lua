@@ -3,15 +3,16 @@
 local NORMAL_TEXTURE = [[Interface\Addons\evl_NamePlates\Minimalist]]
 local GLOW_TEXTURE = [[Interface\Addons\evl_NamePlates\glowTex]]
 
-local UPDATE_FREQUENCY = 0.2
+local UPDATE_FREQUENCY = 0.5
 local f = CreateFrame('Frame', 'evl_NamePlates', UIParent)
-f.hooked = {}
 f.shown = {}
+local shown = f.shown
 
 local backdrop = {
     edgeFile = GLOW_TEXTURE, edgeSize = 5,
     insets = {left = 3, right = 3, top = 3, bottom = 3}
 }
+
 
 local function updateGlow(self)
     --self.glow:SetBackdropBorderColor(0,0,0)
@@ -23,14 +24,18 @@ local function updateGlow(self)
     end
 end
 
-local function showCheck(self)
-    if(self:IsShown()) then
-        f.shown[self] = true
-        updateGlow(self)
-        self.healthBar:SetHeight(6)
-    else
-        f.shown[self] = nil
-    end
+local function updateNamePlate(self)
+    self.healthBar:SetHeight(6)
+    updateGlow(self)
+end
+
+local function OnShow(self)
+    shown[self] = true
+    updateNamePlate(self)
+end
+
+local function OnHide(self)
+    shown[self] = nil
 end
 
 local function makeup(frame)
@@ -82,9 +87,13 @@ local function makeup(frame)
     frame.glow:SetBackdropColor(0, 0, 0)
     frame.glow:SetBackdropBorderColor(0, 0, 0)
 
-    frame:SetScript('OnShow', showCheck)
-    frame:SetScript('OnHide', showCheck)
-    showCheck(frame)
+    frame:SetScript('OnShow', OnShow)
+    frame:SetScript('OnHide', OnHide)
+    if(frame:IsShown()) then
+        OnShow(frame)
+    else
+        OnHide(frame)
+    end
 
     -- Cast bar
     --castBar:SetHeight(5)
@@ -105,17 +114,6 @@ local isValidFrame = function(frame)
     --end
 end
 
-f.validFrame = setmetatable({}, {__index = function(t, i)
-    local isvalid = false
-    local name = i:GetName()
-    if(name and name:match'^NamePlate(%d+)$') then
-        isvalid = true
-    end
-
-    t[i] = isvalid
-    return isvalid
-end})
-
 local total = 1
 local numChildren = 0
 f:SetScript('OnUpdate', function(self, elapsed)
@@ -123,8 +121,8 @@ f:SetScript('OnUpdate', function(self, elapsed)
     if total > 0 then return end
     total = UPDATE_FREQUENCY
 
-    for frame in next, self.shown do
-        updateGlow(frame)
+    for frame in next, shown do
+        updateNamePlate(frame)
     end
 
     local num = WorldFrame:GetNumChildren()
@@ -134,13 +132,24 @@ f:SetScript('OnUpdate', function(self, elapsed)
     end
 end)
 
+local validFrame = function(f)
+    local name = f:GetName()
+    if(name and name:match'^NamePlate(%d+)$') then
+        return true
+    end
+    return false
+end
+
 function f:Update()
     for i = 1, select('#', WorldFrame:GetChildren()) do
         frame = select(i, WorldFrame:GetChildren())
 
-        if(not self.hooked[frame]) and self.validFrame[frame] then
-            makeup(frame)
-            self.hooked[frame] = true
+        if(frame.__evlnameplates == nil) then
+            local valid = validFrame(frame)
+            frame.__evlnameplates = valid
+            if(valid) then
+                makeup(frame)
+            end
         end
     end		
 end
